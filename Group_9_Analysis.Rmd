@@ -139,3 +139,4 @@ table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","f
 table
 ```
 
+
