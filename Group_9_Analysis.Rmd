@@ -1,0 +1,141 @@
+---
+title: "Group_9_Analysis"
+author: "Group 9"
+date: "2023-03-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Introduction
+
+Our group's data is IMDB film database. This database contains a variety of information on all films that have been released. And our research target is to analyse the properties that influence rate of movies. 
+
+```{r loadpackages,echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Load required packages
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(dplyr)
+library(broom)
+```
+
+# Step 1: Data pre-processing
+
+```{r data, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# read data
+films <- read.csv("dataset9.csv", header = TRUE)
+# View data structures and variable types
+str(films)
+# View variable distribution
+summary(films)
+# Correlation matrix
+cor(films[,c("year", "length", "budget", "votes", "rating")])
+# Check for missing values
+sum(is.na(films))
+# Check which column has missing values
+colSums(is.na(films))
+# ########Fill missing values (any other way?)
+mean_length <- mean(films$length, na.rm = TRUE)
+films$length[is.na(films$length)] <- mean_length
+# Check if missing values were filled successfully
+sum(is.na(films))
+```
+
+# Step 2: Data Visualizations
+
+```{r visualization1.1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:box1}Armed forces share population by Country.",fig.pos='H'}
+# Draw a histogram (show the number of movies with different ratings, and the color distinguishes the fuzzy interval with a score of about 7)
+ggplot(films, aes(x = rating, fill = factor(rating > 7))) +
+  geom_histogram(alpha = 0.5, binwidth = 0.5) +
+  scale_fill_manual(values = c("#E69F00", "#56B4E9"), 
+                    name = "Rating > 7", 
+                    labels = c("No", "Yes")) +
+  labs(title = "Distribution of IMDB ratings", x = "IMDB rating", y = "Frequency") +
+  theme_classic()
+```
+
+```{r visualization1.2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:scat1}Armed forces share population by Terrorism fatalities and country,The points have been jittered.",fig.pos='H'}
+# Draw a scatter plot (show the relationship between budget, ratingg and genre)
+ggplot(films, aes(x = budget, y = rating)) +
+  geom_point(aes(size = votes, color = genre)) +
+  scale_color_brewer(palette = "Set2", name = "Genre") +
+  labs(title = "Relationship between budget, rating and genre", 
+       x = "Budget", y = "IMDB rating") +
+  theme_classic()
+```
+
+
+```{r visualization2.1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:box2}Armed forces share population by century.",fig.pos='H' }
+# Draw a line chart by year (the mean and median of each year are drawn in the red and blue lines)
+ggplot(films, aes(x = year, y = rating, group = 1)) +
+  stat_summary(fun = mean, geom = "line", color = "red", size = 1) +
+  stat_summary(fun = median, geom = "line", color = "blue", size = 1) +
+  scale_x_continuous(breaks = seq(1930, 2020, by = 10), 
+                     labels = seq(1930, 2020, by = 10)) +
+  labs(title = "Trend of IMDB rating", x = "Year", y = "IMDB rating") +
+  theme_classic()
+```
+
+# Step 3: Data Processing
+
+```{r data processiong, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Convert year and length to continuous variables(Because time and length can be regarded as unlimited values)
+films$year <- as.numeric(as.character(films$year))
+films$length <- as.numeric(as.character(films$length))
+# one-hot encoding
+films <- cbind(films, model.matrix(~genre-1, data=films))
+# Binarize the IMDB score
+films$rating2 <- ifelse(films$rating > 7, 1, 0)
+```
+
+# Step 4: Model Fit
+
+```{r model, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Fitting a GLM model
+fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=films, family=binomial)
+summary(fit)
+```
+
+# Step 5: odds ratio
+
+```{r odds ratio, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Extract Coefficients and Standard Errors
+coef_df <- tidy(fit, exponentiate = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate_if(is.numeric, list(~ round(., 2))) %>%
+  mutate(lower = estimate - 1.96 * std.error,
+         upper = estimate + 1.96 * std.error)
+
+# plot the coefficients
+ggplot(coef_df, aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  coord_flip() +
+  labs(title = "Effect of predictors on movie rating",
+       x = "", y = "Odds Ratio") +
+  theme_minimal()
+```
+According to the results, the following conclusions can be drawn:
+Year (year) has a coefficient of 1, indicating that there is no significant difference in the impact of the year on the score.
+The coefficient of film length (length) is 0.94, and the confidence interval does not include 1, indicating that the film length has a negative impact on the score, that is, the longer the film length, the lower the score.
+The coefficient of budget (budget) is 1.68, and the confidence interval does not include 1, indicating that the budget has a positive impact on the score, that is, the higher the budget, the higher the score.
+The coefficient of the number of votes (votes) is 1, indicating that the impact of the number of votes on the score is not significantly different.
+The coefficients of different types of movies are quite different, and the coefficients of action movies (genreAction) and cartoons (genreAnimation) are relatively small, indicating that these two types of movies have little impact on ratings; while the coefficients of documentaries (genreDocumentary) are compared Large, indicating that documentaries have a greater impact on ratings.
+
+# Step 6: Variables Selection and Models Selection
+
+Due to the P-value of previous model result, we could delect eht insignificant variables and fit a new model. And we could alse use odds ratio to choose variables, and use these new variables to fit. Then we compare with AICs belong to different models. 
+
+```{r selection, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# After selecting variables:
+# By the result of glm fit summary, we choose the variables with p-value lower than 0.05
+# By the result of odds ratio, we choose the variables that have influence on rating
+fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data=films, family=binomial)
+fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
+table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
+table
+```
+
