@@ -2,7 +2,9 @@
 title: "Group_9_Analysis"
 author: "Group 9"
 date: "2023-03-09"
-output: pdf_document
+output:
+  pdf_document: default
+  word_document: default
 ---
 
 ```{r setup, include=FALSE}
@@ -57,7 +59,7 @@ ggplot(films, aes(x = rating, fill = factor(rating > 7))) +
   theme_classic()
 ```
 
-```{r visualization1.2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:scat1}Armed forces share population by Terrorism fatalities and country,The points have been jittered.",fig.pos='H'}
+```{r visualization1.2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:scat1}Armed forces share population by Terrorism fatalities and country,The points have been jittered.",fig.pos='h'}
 # Draw a scatter plot (show the relationship between budget, ratingg and genre)
 ggplot(films, aes(x = budget, y = rating)) +
   geom_point(aes(size = votes, color = genre)) +
@@ -68,7 +70,7 @@ ggplot(films, aes(x = budget, y = rating)) +
 ```
 
 
-```{r visualization2.1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:box2}Armed forces share population by century.",fig.pos='H' }
+```{r visualization2.1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:box2}Armed forces share population by century.",fig.pos='h' }
 # Draw a line chart by year (the mean and median of each year are drawn in the red and blue lines)
 ggplot(films, aes(x = year, y = rating, group = 1)) +
   stat_summary(fun = mean, geom = "line", color = "red", size = 1) +
