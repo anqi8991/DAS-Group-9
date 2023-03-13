@@ -22,6 +22,7 @@ library(ggplot2)
 library(scales)
 library(dplyr)
 library(broom)
+library(pROC)
 ```
 
 # Step 1: Data pre-processing
@@ -91,14 +92,31 @@ films$length <- as.numeric(as.character(films$length))
 films <- cbind(films, model.matrix(~genre-1, data=films))
 # Binarize the IMDB score
 films$rating2 <- ifelse(films$rating > 7, 1, 0)
+# Split data into training and testing sets
+set.seed(123)
+train_index <- sample(1:nrow(films), size = round(nrow(films) * 0.7), replace = FALSE)
+train_data <- films[train_index, ]
+test_data <- films[-train_index, ]
 ```
 
 # Step 4: Model Fit
 
 ```{r model, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
-# Fitting a GLM model
-fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=films, family=binomial)
-summary(fit)
+# Fit the glm model on the training data
+fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=train_data, family=binomial)
+
+# Predict the test data using the fitted model
+test_data$predicted <- predict(fit, newdata = test_data, type = "response")
+# Calculate the ROC curve and AUC
+
+roc_data <- roc(test_data$rating2, test_data$predicted)
+roc_auc <- auc(roc_data)
+
+# Plot the ROC curve
+plot(roc_data, main = "ROC Curve for Movie Rating Model",
+     xlab = "False Positive Rate", ylab = "True Positive Rate", 
+     print.auc = TRUE, auc.polygon = TRUE, grid=c(0.2, 0.2), col = "darkblue")
+abline(a = 0, b = 1, lty = 2, col = "gray")
 ```
 
 # Step 5: odds ratio
@@ -140,5 +158,10 @@ fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=fil
 table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
 table
 ```
+
+
+
+
+
 
 
