@@ -104,7 +104,7 @@ films$rating2 <- ifelse(films$rating > 7, 1, 0)
 
 ```{r model, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Fit the glm model on the training data
-fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation + genreComedy + genreDocumentary + genreDrama + genreRomance, data = train_data, family = binomial)
+fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation + genreComedy + genreDocumentary + genreDrama + genreRomance, data = films, family = binomial)
 ```
 
 # Step 5: Variables Selection and Models Selection
