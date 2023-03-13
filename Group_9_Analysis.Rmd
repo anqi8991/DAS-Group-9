@@ -92,11 +92,6 @@ films$length <- as.numeric(as.character(films$length))
 films <- cbind(films, model.matrix(~genre-1, data=films))
 # Binarize the IMDB score
 films$rating2 <- ifelse(films$rating > 7, 1, 0)
-# Split data into training and testing sets
-set.seed(123)
-train_index <- sample(1:nrow(films), size = round(nrow(films) * 0.7), replace = FALSE)
-train_data <- films[train_index, ]
-test_data <- films[-train_index, ]
 ```
 
 # Step 4: Model Fit
@@ -104,26 +99,79 @@ test_data <- films[-train_index, ]
 ```{r model, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Fit the glm model on the training data
 fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=train_data, family=binomial)
+```
 
+# Step 5: Variables Selection and Models Selection
+
+Due to the P-value of previous model result, we could delect eht insignificant variables and fit a new model. And we could alse use odds ratio to choose variables, and use these new variables to fit. Then we compare with AICs belong to different models. 
+
+```{r selection, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# After selecting variables:
+# By the result of glm fit summary, we choose the variables with p-value lower than 0.05
+# By the result of odds ratio, we choose the variables that have influence on rating
+fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data=films, family=binomial)
+fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
+table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
+table
+```
+
+```{r plot2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Store the variables that need to be scatter plotted in a data frame
+variables <- c("year", "length", "budget", "votes", "genreAction", "genreAnimation", "genreComedy", "genreDocumentary", "genreDrama", "genreRomance")
+plot_data <- films[variables]
+
+# Plot a scatterplot matrix
+pairs(plot_data)
+```
+It can be seen from the scatter plot matrix that the scatter plots between length and year, votes and year, length and votes, budget and length, budget and votes all present a triangular shape, that is, there may be interactions, so these five Interaction terms are put into the model for comparison
+
+```{r selection2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+#test interaction
+films$year_length <- films$year * films$length
+films$year_votes <- films$year * films$votes
+films$length_votes <- films$length * films$votes
+films$budget_length <- films$budget * films$length
+films$budget_votes <- films$budget * films$votes
+
+fit3 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=films, family=binomial)
+fit4 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance + year_length + year_votes + length_votes+budget_length+budget_votes, data=films, family=binomial)
+anova(fit3, fit4, test="Chisq")
+```
+Model 2 adds five interaction items on the basis of Model. From the results, the residual deviation (Resid. Dev) of Model 2 is 1514.9, which is smaller than the residual deviation (Resid. Dev) of Model 1549.1, which shows that the fitting effect of Model 2 is better. At the same time, the four new interaction items in Model 2 are statistically significant, that is, their impact on the dependent variable rating2 is statistically significant.
+
+# Step 6: odds ratio
+
+```{r odds ratio, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Split data into training and testing sets
+set.seed(123)
+train_index <- sample(1:nrow(films), size = round(nrow(films) * 0.7), replace = FALSE)
+train_data <- films[train_index, ]
+test_data <- films[-train_index, ]
 # Predict the test data using the fitted model
-test_data$predicted <- predict(fit, newdata = test_data, type = "response")
+test_data$predicted <- predict(fit4, newdata = test_data, type = "response")
 # Calculate the ROC curve and AUC
 
 roc_data <- roc(test_data$rating2, test_data$predicted)
 roc_auc <- auc(roc_data)
+roc_auc
+```
 
+```{r odds ratio1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Plot the ROC curve
 plot(roc_data, main = "ROC Curve for Movie Rating Model",
      xlab = "False Positive Rate", ylab = "True Positive Rate", 
      print.auc = TRUE, auc.polygon = TRUE, grid=c(0.2, 0.2), col = "darkblue")
 abline(a = 0, b = 1, lty = 2, col = "gray")
 ```
+This result shows that the model works well for predicting the classification of observations in the test dataset, because the area under the ROC curve is 0.9499, which means that the model can distinguish positive and negative examples to a large extent
+```{r result, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+#View model results
+summary(fit4)
+```
 
-# Step 5: odds ratio
-
-```{r odds ratio, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+```{r result2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Extract Coefficients and Standard Errors
-coef_df <- tidy(fit, exponentiate = TRUE) %>%
+coef_df <- tidy(fit4, exponentiate = TRUE) %>%
   filter(term != "(Intercept)") %>%
   mutate_if(is.numeric, list(~ round(., 2))) %>%
   mutate(lower = estimate - 1.96 * std.error,
@@ -138,30 +186,28 @@ ggplot(coef_df, aes(x = term, y = estimate)) +
        x = "", y = "Odds Ratio") +
   theme_minimal()
 ```
+
 According to the results, the following conclusions can be drawn:
-Year (year) has a coefficient of 1, indicating that there is no significant difference in the impact of the year on the score.
-The coefficient of film length (length) is 0.94, and the confidence interval does not include 1, indicating that the film length has a negative impact on the score, that is, the longer the film length, the lower the score.
-The coefficient of budget (budget) is 1.68, and the confidence interval does not include 1, indicating that the budget has a positive impact on the score, that is, the higher the budget, the higher the score.
-The coefficient of the number of votes (votes) is 1, indicating that the impact of the number of votes on the score is not significantly different.
-The coefficients of different types of movies are quite different, and the coefficients of action movies (genreAction) and cartoons (genreAnimation) are relatively small, indicating that these two types of movies have little impact on ratings; while the coefficients of documentaries (genreDocumentary) are compared Large, indicating that documentaries have a greater impact on ratings.
+Intercept: The log odds of the response variable being 1 when all independent variables are 0 in this model is 8.276.
 
-# Step 6: Variables Selection and Models Selection
+Year: For each increase of 1 year, the log odds of a movie being classified as rating2=1 will decrease by 2.145e-03 units.
 
-Due to the P-value of previous model result, we could delect eht insignificant variables and fit a new model. And we could alse use odds ratio to choose variables, and use these new variables to fit. Then we compare with AICs belong to different models. 
+Length: For each increase of 1 minute in movie length, the log odds of a movie being classified as rating2=1 will decrease by 0.2969 units, with a p-value of 0.059, which is not significant enough.
 
-```{r selection, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
-# After selecting variables:
-# By the result of glm fit summary, we choose the variables with p-value lower than 0.05
-# By the result of odds ratio, we choose the variables that have influence on rating
-fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data=films, family=binomial)
-fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
-table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
-table
-```
+Budget: For each increase of 1 unit in budget, the log odds of a movie being classified as rating2=1 will increase by 0.2304 units, with a p-value less than 0.001, which is significant.
 
+Votes: For each increase of 1 vote, the log odds of a movie being classified as rating2=1 will decrease by 0.0043 units, with a p-value of 0.306, which is not significant enough.
 
+genreAction, genreAnimation, genreComedy, genreDocumentary, and genreDrama: Compared to genreThriller, the log odds of movies of other genres being classified as rating2=1 are -4.126, -4.889, -0.6432, 1.447, and -5.656 units, respectively, with p-values less than 0.05, which are significant.
 
+genreRomance: Compared to genreThriller, the log odds of romance movies being classified as rating2=1 is -4.992 units, with a p-value less than 0.001, which is significant.
 
+year_length: For each increase of 1 year and 1 minute in movie length, the log odds of a movie being classified as rating2=1 will increase by 9.426e-05 units, with a p-value of 0.236, which is not significant enough.
 
+year_votes: For each increase of 1 year and 1 vote, the log odds of a movie being classified as rating2=1 will increase by 2.205e-06 units, with a p-value of 0.296, which is not significant enough.
 
+length_votes: For each increase of 1 minute in movie length, the log odds of a movie being classified as rating2=1 will increase by 1.122e-06 units, with a p-value of 0.125, which is not significant enough.
 
+budget_length: For each increase of 1 unit in budget and 1 minute in movie length, the log odds of a movie being classified as rating2=1 will increase by 0.003978 units, with a p-value less than 0.001, which is significant.
+
+budget_votes: For each increase of 1 unit in budget and 1 vote, the log odds of a movie being classified as rating2=1 will decrease by 1.411e-05 units, with a p-value of 0.
