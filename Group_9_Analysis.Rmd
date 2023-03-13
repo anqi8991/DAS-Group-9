@@ -35,7 +35,7 @@ str(films)
 # View variable distribution
 summary(films)
 # Correlation matrix
-cor(films[,c("year", "length", "budget", "votes", "rating")])
+cor(films[, c("year", "length", "budget", "votes", "rating")])
 # Check for missing values
 sum(is.na(films))
 # Check which column has missing values
@@ -53,9 +53,11 @@ sum(is.na(films))
 # Draw a histogram (show the number of movies with different ratings, and the color distinguishes the fuzzy interval with a score of about 7)
 ggplot(films, aes(x = rating, fill = factor(rating > 7))) +
   geom_histogram(alpha = 0.5, binwidth = 0.5) +
-  scale_fill_manual(values = c("#E69F00", "#56B4E9"), 
-                    name = "Rating > 7", 
-                    labels = c("No", "Yes")) +
+  scale_fill_manual(
+    values = c("#E69F00", "#56B4E9"),
+    name = "Rating > 7",
+    labels = c("No", "Yes")
+  ) +
   labs(title = "Distribution of IMDB ratings", x = "IMDB rating", y = "Frequency") +
   theme_classic()
 ```
@@ -65,8 +67,10 @@ ggplot(films, aes(x = rating, fill = factor(rating > 7))) +
 ggplot(films, aes(x = budget, y = rating)) +
   geom_point(aes(size = votes, color = genre)) +
   scale_color_brewer(palette = "Set2", name = "Genre") +
-  labs(title = "Relationship between budget, rating and genre", 
-       x = "Budget", y = "IMDB rating") +
+  labs(
+    title = "Relationship between budget, rating and genre",
+    x = "Budget", y = "IMDB rating"
+  ) +
   theme_classic()
 ```
 
@@ -76,8 +80,10 @@ ggplot(films, aes(x = budget, y = rating)) +
 ggplot(films, aes(x = year, y = rating, group = 1)) +
   stat_summary(fun = mean, geom = "line", color = "red", size = 1) +
   stat_summary(fun = median, geom = "line", color = "blue", size = 1) +
-  scale_x_continuous(breaks = seq(1930, 2020, by = 10), 
-                     labels = seq(1930, 2020, by = 10)) +
+  scale_x_continuous(
+    breaks = seq(1930, 2020, by = 10),
+    labels = seq(1930, 2020, by = 10)
+  ) +
   labs(title = "Trend of IMDB rating", x = "Year", y = "IMDB rating") +
   theme_classic()
 ```
@@ -89,7 +95,7 @@ ggplot(films, aes(x = year, y = rating, group = 1)) +
 films$year <- as.numeric(as.character(films$year))
 films$length <- as.numeric(as.character(films$length))
 # one-hot encoding
-films <- cbind(films, model.matrix(~genre-1, data=films))
+films <- cbind(films, model.matrix(~ genre - 1, data = films))
 # Binarize the IMDB score
 films$rating2 <- ifelse(films$rating > 7, 1, 0)
 ```
@@ -98,7 +104,7 @@ films$rating2 <- ifelse(films$rating > 7, 1, 0)
 
 ```{r model, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Fit the glm model on the training data
-fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=train_data, family=binomial)
+fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation + genreComedy + genreDocumentary + genreDrama + genreRomance, data = train_data, family = binomial)
 ```
 
 # Step 5: Variables Selection and Models Selection
@@ -109,9 +115,9 @@ Due to the P-value of previous model result, we could delect eht insignificant v
 # After selecting variables:
 # By the result of glm fit summary, we choose the variables with p-value lower than 0.05
 # By the result of odds ratio, we choose the variables that have influence on rating
-fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data=films, family=binomial)
-fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
-table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
+fit2 <- glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data = films, family = binomial)
+fit3 <- glm(rating2 ~ length + budget + genreComedy + genreDocumentary, data = films, family = binomial)
+table <- matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit", "fit2", "fit3"), c("AIC")))
 table
 ```
 
@@ -126,20 +132,20 @@ pairs(plot_data)
 It can be seen from the scatter plot matrix that the scatter plots between length and year, votes and year, length and votes, budget and length, budget and votes all present a triangular shape, that is, there may be interactions, so these five Interaction terms are put into the model for comparison
 
 ```{r selection2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
-#test interaction
+# test interaction
 films$year_length <- films$year * films$length
 films$year_votes <- films$year * films$votes
 films$length_votes <- films$length * films$votes
 films$budget_length <- films$budget * films$length
 films$budget_votes <- films$budget * films$votes
 
-fit3 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=films, family=binomial)
-fit4 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance + year_length + year_votes + length_votes+budget_length+budget_votes, data=films, family=binomial)
-anova(fit3, fit4, test="Chisq")
+fit3 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation + genreComedy + genreDocumentary + genreDrama + genreRomance, data = films, family = binomial)
+fit4 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation + genreComedy + genreDocumentary + genreDrama + genreRomance + year_length + year_votes + length_votes + budget_length + budget_votes, data = films, family = binomial)
+anova(fit3, fit4, test = "Chisq")
 ```
 Model 2 adds five interaction items on the basis of Model. From the results, the residual deviation (Resid. Dev) of Model 2 is 1514.9, which is smaller than the residual deviation (Resid. Dev) of Model 1549.1, which shows that the fitting effect of Model 2 is better. At the same time, the four new interaction items in Model 2 are statistically significant, that is, their impact on the dependent variable rating2 is statistically significant.
 
-# Step 6: odds ratio
+# Step 6: Model summary
 
 ```{r odds ratio, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Split data into training and testing sets
@@ -158,14 +164,16 @@ roc_auc
 
 ```{r odds ratio1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Plot the ROC curve
-plot(roc_data, main = "ROC Curve for Movie Rating Model",
-     xlab = "False Positive Rate", ylab = "True Positive Rate", 
-     print.auc = TRUE, auc.polygon = TRUE, grid=c(0.2, 0.2), col = "darkblue")
+plot(roc_data,
+  main = "ROC Curve for Movie Rating Model",
+  xlab = "False Positive Rate", ylab = "True Positive Rate",
+  print.auc = TRUE, auc.polygon = TRUE, grid = c(0.2, 0.2), col = "darkblue"
+)
 abline(a = 0, b = 1, lty = 2, col = "gray")
 ```
 This result shows that the model works well for predicting the classification of observations in the test dataset, because the area under the ROC curve is 0.9499, which means that the model can distinguish positive and negative examples to a large extent
 ```{r result, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
-#View model results
+# View model results
 summary(fit4)
 ```
 
@@ -174,16 +182,20 @@ summary(fit4)
 coef_df <- tidy(fit4, exponentiate = TRUE) %>%
   filter(term != "(Intercept)") %>%
   mutate_if(is.numeric, list(~ round(., 2))) %>%
-  mutate(lower = estimate - 1.96 * std.error,
-         upper = estimate + 1.96 * std.error)
+  mutate(
+    lower = estimate - 1.96 * std.error,
+    upper = estimate + 1.96 * std.error
+  )
 
 # plot the coefficients
 ggplot(coef_df, aes(x = term, y = estimate)) +
   geom_point(size = 3) +
   geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
   coord_flip() +
-  labs(title = "Effect of predictors on movie rating",
-       x = "", y = "Odds Ratio") +
+  labs(
+    title = "Effect of predictors on movie rating",
+    x = "", y = "Odds Ratio"
+  ) +
   theme_minimal()
 ```
 
