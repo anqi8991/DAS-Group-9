@@ -157,6 +157,24 @@ fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + ge
 fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
 table = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
 table
+
+#ROC curve and AUC for Model 2
+test_data$predicted2 <- predict(fit2, newdata = test_data, type = "response")
+roc_data2 <- roc(test_data$rating2, test_data$predicted2)
+roc_auc2 <- auc(roc_data2)
+plot(roc_data2, main = "ROC Curve for Movie Rating Model 2",
+     xlab = "False Positive Rate", ylab = "True Positive Rate", 
+     print.auc = TRUE, auc.polygon = TRUE, grid=c(0.2, 0.2), col = "darkblue")
+abline(a = 0, b = 1, lty = 2, col = "gray")
+
+#ROC curve and AUC for Model 3
+test_data$predicted3 <- predict(fit3, newdata = test_data, type = "response")
+roc_data3 <- roc(test_data$rating2, test_data$predicted3)
+roc_auc3 <- auc(roc_data3)
+plot(roc_data3, main = "ROC Curve for Movie Rating Model 3",
+     xlab = "False Positive Rate", ylab = "True Positive Rate", 
+     print.auc = TRUE, auc.polygon = TRUE, grid=c(0.2, 0.2), col = "darkblue")
+abline(a = 0, b = 1, lty = 2, col = "gray")
 ```
 
 
