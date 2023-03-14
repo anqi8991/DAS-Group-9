@@ -42,6 +42,7 @@ library(scales)
 library(dplyr)
 library(broom)
 library(pROC)
+library(MASS)
 ```
 
 
@@ -322,4 +323,10 @@ According to the results, the following conclusions can be drawn:
 
 The report analyzes IMDb data to extract features that affect the rating of movies. The model developed for the analysis has an AUC value of 0.95, which is very promising. Based on the results obtained, we can conclude that budget and genre have a significant effect on determining whether the rating of a movie is greater than 7. Besides, budget-length and budget-votes interactions have also influenced the ratings.
 
-For further research, additional aspects such as film gross can be added.
+For further research, we use stepwise regression method to do model optimization.
+
+```{r optimization, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+step.fit4 <- stepAIC(fit4, direction = "both", trace = FALSE)
+summary(step.fit4)
+```
+We get a model with higher AIC value. And all the variables in this model is significant.
