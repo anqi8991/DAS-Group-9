@@ -218,7 +218,7 @@ pairs(plot_data)
 
 It can be seen from the scatter plot matrix (figure \ref{fig:pairplot1}) that the scatter plots between length and year, votes and year, length and votes, budget and length, budget and votes all present a triangular shape, that is, there may be interactions. And as for year and budget, the pattern of that plot is rectangular. Hence, these five interaction terms are put into the model for comparison
 
-```{r selection2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+```{r selection3, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # test interaction
 films$year_length <- films$year * films$length
 films$year_votes <- films$year * films$votes
