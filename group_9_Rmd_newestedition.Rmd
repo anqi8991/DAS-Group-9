@@ -1,7 +1,7 @@
 ---
-title: "Title of the project"
+title: "A GLM Approach to Analyse IMDb Scores"
 author: "Group 9"
-date: ""
+date: \today
 output:
   pdf_document: 
       extra_dependencies: ["float"]
@@ -158,8 +158,6 @@ The variables \texttt{length, genreAction, genreAnimation, genreComedy, genreDra
 
 The p-values for the variables \texttt{year, genreComedy} and \texttt{genreDocumentary} are greater than 0.05 and hence they are not statistically significant.
 
-The $\chi^2$ value for the model can be calculated as 2330.2. The p-value corresponding to this $\chi^2$ value and 10 degrees of freedom is 0.000000. Since this p-value is much lower than 0.05, we would conclude that this model is highly useful.
-
 
 ```{r oddsratio, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
 # Extract Coefficients and Standard Errors
@@ -184,6 +182,7 @@ ggplot(coef_df, aes(x = term, y = estimate)) +
 ```
 
 According to the results, the following conclusions can be drawn:
+
 * Year (year) has a coefficient of 1, indicating that there is no significant difference in the impact of the year on the score.
 * The coefficient of film length (length) is 0.94, and the confidence interval does not include 1, indicating that the film length has a negative impact on the score, that is, the longer the film length, the lower the score.
 * The coefficient of budget (budget) is 1.68, and the confidence interval does not include 1, indicating that the budget has a positive impact on the score, that is, the higher the budget, the higher the score.
