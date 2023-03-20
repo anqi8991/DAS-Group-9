@@ -1,0 +1,332 @@
+---
+title: "A GLM Approach to Analyse IMDb Scores"
+author: "Group 9"
+date: \today
+output:
+  pdf_document: 
+      extra_dependencies: ["float"]
+  word_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, tidy.opts=list(width.cutoff=55),tidy=TRUE)
+```
+<!-- 'tidy.opts' is to prevent the code from running off a pdf page. Requires 'formatR' package  -->
+
+# Introduction
+
+IMDb scores are an excellent way to gauge the performance of movies. In this project, we use Generalised Linear Models (GLM) on a set of movies to determine the properties that influence their IMDb scores. 
+
+
+### Data description 
+The dataset used for this analysis contains information on 3001 movies and was collected from the IMDb database. It include 7 features namely: 
+
+* film\_id: The unique identifier for the film
+* year: Year of release of the film in cinemas
+* length: Duration (in minutes)
+* budget: Budget for the films production (in $1000000s)
+* votes: Number of positive votes received by viewers
+* genre: Genre of the film
+* rating: IMDB rating from 0-10
+
+
+# Step 1: Data exploration 
+
+The following packages were used for the analysis.
+
+```{r loadpackages,echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Load required packages
+library(tidyverse)
+library(ggplot2)
+library(scales)
+library(dplyr)
+library(broom)
+library(pROC)
+library(MASS)
+```
+
+
+```{r data, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Read data
+films <- read.csv("dataset9.csv", header = TRUE)
+# View data structures and variable types
+str(films)
+# View variable distribution
+summary(films)
+# Find the count of each category in genre
+films %>% 
+  group_by(genre) %>% 
+  summarise(count=n())
+```
+The dataset contains information about movies released between 1895 and 2005. While the length of the movies in our dataset is between 1 and 555 minutes, 98% (approx.) of the movies have a duration less than 150 minutes, and roughly 82% of them belong to one of the genres of action, comedy, or drama.
+Moreover, the mean value of the variable \texttt{votes} is significantly greater than its median and therefore, its distribution is skewed to the right.
+
+Since our goal is to determine the features that affect the IMDb score of a movie, we consider \texttt{rating} as the response variable. The least value observed for rating in our dataset is 0.8, while the greatest value is 9.2. The distribution of IMDb scores is shown in figure \ref{fig:box1}.
+
+\newpage
+
+```{r corr, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Correlation matrix
+cor(films[,c("year", "length", "budget", "votes", "rating")])
+```
+We do not observe any significant correlation between the five numeric variables.
+
+# Step 2: Data Visualizations 
+
+```{r visualization1.1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:box1}Distribution of IMDb ratings",fig.pos='H'}
+# Draw a histogram (show the number of movies with different ratings, and the color distinguishes the fuzzy interval with a score of about 7)
+ggplot(films, aes(x = rating, fill = factor(rating > 7))) +
+  geom_histogram(alpha = 0.5, binwidth = 0.5) +
+  scale_fill_manual(values = c("#E69F00", "#56B4E9"), 
+                    name = "Rating > 7", 
+                    labels = c("No", "Yes")) +
+  labs(title = "Distribution of IMDB ratings", x = "IMDB rating", y = "Frequency") +
+  theme_classic()
+```
+
+The histogram (figure \ref{fig:box1}) shows that the IMDb scores follow a bimodal distribution i.e., it has two peaks. This indicates that the data contains two subgroups: one with IMDb scores ranging from 0 to 7, and another with scores ranging from 7 to 10.
+
+```{r visualization1.2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:scat1}Relationship between budget, rating and genre",fig.pos='h'}
+# Draw a scatter plot (show the relationship between budget, rating and genre)
+ggplot(films, aes(x = budget, y = rating)) +
+  geom_point(aes(size = votes, color = genre)) +
+  scale_color_brewer(palette = "Set2", name = "Genre") +
+  labs(title = "Relationship between budget, rating and genre", 
+       x = "Budget", y = "IMDB rating") +
+  theme_classic()
+```
+
+```{r visualization2.1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:box2}Trend of IMDB rating",fig.pos='H' }
+# Draw a line chart by year (the mean and median of each year are drawn in the red and blue lines)
+ggplot(films, aes(x = year, y = rating, group = 1)) +
+  stat_summary(fun = mean, geom = "line", color = "red", size = 1) +
+  stat_summary(fun = median, geom = "line", color = "blue", size = 1) +
+  scale_x_continuous(breaks = seq(1930, 2020, by = 10), 
+                     labels = seq(1930, 2020, by = 10)) +
+  labs(title = "Trend of IMDB rating", x = "Year", y = "IMDB rating") +
+  theme_classic()
+```
+
+
+# Step 3: Data preprocessing
+In order to make the dataset more suitable for analysis we have implemented the following changes.
+
+## 3.1. Handling missing values
+
+The variable \texttt{length} has 4.2% missing values. Since this is a relatively small value, we have decided to replace them with the median length of the film.
+
+```{r nadata, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Check for missing values
+sum(is.na(films))
+# Check which column has missing values
+colSums(is.na(films))
+#Fill missing values 
+median_length <- median(films$length, na.rm = TRUE)
+films$length[is.na(films$length)] <- median_length
+# Check if missing values were filled successfully
+sum(is.na(films))
+```
+<!--mean_length <- mean(films$length, na.rm = TRUE)
+films$length[is.na(films$length)] <- mean_length-->
+
+## 3.2. Feature transformation
+
+We have performed transformations for columns \texttt{year} and \texttt{length} to convert them to continuous variables. Since \texttt{genre} is a qualitative feature, we used the \textit{one-hot encoding technique} to transform it into binary. And finally, considering the bimodal distribution of IMDb scores, we binarize the variable \texttt{rating} by choosing the threshold value 7.
+
+```{r data processiong, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Convert year and length to continuous variables(Because time and length can be regarded as unlimited values)
+films$year <- as.numeric(as.character(films$year))
+films$length <- as.numeric(as.character(films$length))
+# one-hot encoding
+films <- cbind(films, model.matrix(~genre-1, data=films))
+# Binarize the IMDB score
+films$rating2 <- ifelse(films$rating > 7, 1, 0)
+```
+
+After all the above operations are performed, the dataset contains 3001 observations with 15 features.
+
+# Step 4: Model Fit 
+
+Genaralised Linear Model (GLM) based on logistic regression was chosen to model the data.
+
+```{r model, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Fitting a GLM model
+fit <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation+genreComedy + genreDocumentary + genreDrama + genreRomance, data=films, family=binomial)
+summary(fit)
+```
+
+The variables \texttt{length, genreAction, genreAnimation, genreComedy, genreDrama} and \texttt{genreRomance} take negative values for coefficient estimates. This means that higher values of these variables are associated with a lower likelihood of the \texttt{rating} variable taking on a value of 1.
+
+The p-values for the variables \texttt{year, genreComedy} and \texttt{genreDocumentary} are greater than 0.05 and hence they are not statistically significant.
+
+
+```{r oddsratio, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Extract Coefficients and Standard Errors
+coef_df <- tidy(fit, exponentiate = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate_if(is.numeric, list(~ round(., 2))) %>%
+  mutate(
+    lower = estimate - 1.96 * std.error,
+    upper = estimate + 1.96 * std.error
+  )
+
+# plot the coefficients
+ggplot(coef_df, aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  coord_flip() +
+  labs(
+    title = "Effect of predictors on movie rating",
+    x = "", y = "Odds Ratio"
+  ) +
+  theme_minimal()
+```
+
+According to the results, the following conclusions can be drawn:
+
+* Year (year) has a coefficient of 1, indicating that there is no significant difference in the impact of the year on the score.
+* The coefficient of film length (length) is 0.94, and the confidence interval does not include 1, indicating that the film length has a negative impact on the score, that is, the longer the film length, the lower the score.
+* The coefficient of budget (budget) is 1.68, and the confidence interval does not include 1, indicating that the budget has a positive impact on the score, that is, the higher the budget, the higher the score.
+* The coefficient of the number of votes (votes) is 1, indicating that the impact of the number of votes on the score is not significantly different.
+* The coefficients of different types of movies are quite different, and the coefficients of action movies (genreAction) and cartoons (genreAnimation) are relatively small, indicating that these two types of movies have little impact on ratings; while the coefficients of documentaries (genreDocumentary) are compared Large, indicating that documentaries have a greater impact on ratings.
+
+# Step 5: Variables Selection and Models Selection 
+
+The observations from variable p-values indicate that some variables are statistically insignificant and hence can be removed from the equation.
+
+```{r selection2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# After selecting variables:
+# According to GLM fit summary, we choose the variables with p-value lower than 0.05
+fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data=films, family=binomial)
+fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
+table1 = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
+table1
+```
+
+The AIC value of the first models is less than that of the second and third model. Therefore, the first model is preferred. 
+
+```{r plot2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Store the variables that need to be scatter plotted in a data frame
+variables <- c("year", "length", "budget", "votes")
+plot_data <- films[variables]
+```
+
+```{r visualization2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE, out.width='90%',fig.align='center',fig.cap="\\label{fig:pairplot1}Scatterplot matrix",fig.pos='h'}
+# Plot a scatterplot matrix
+pairs(plot_data)
+```
+
+It can be seen from the scatter plot matrix (figure \ref{fig:pairplot1}) that the scatter plots between length and year, votes and year, length and votes, budget and length, budget and votes all present a triangular shape, that is, there may be interactions. And as for year and budget, the pattern of that plot is rectangular. Hence, these five interaction terms are put into the model for comparison
+
+```{r selection3, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# test interaction
+films$year_length <- films$year * films$length
+films$year_votes <- films$year * films$votes
+films$length_votes <- films$length * films$votes
+films$budget_length <- films$budget * films$length
+films$budget_votes <- films$budget * films$votes
+
+fit4 <- glm(rating2 ~ year + length + budget + votes + genreAction + genreAnimation + genreComedy + genreDocumentary + genreDrama + genreRomance + year_length + year_votes + length_votes + budget_length + budget_votes, data = films, family = binomial)
+
+table2 = matrix(c(fit$aic, fit4$aic), dimnames = list(c("fit","fit4"), c("AIC")))
+print(table2)
+anova(fit, fit4, test = "Chisq")
+```
+We compare AIC values of these
+
+# Step 6: Model summary
+
+The entire dataset was randomly divided into two groups: training and testing sets, with the random seed specified so that different runs produced the same results. The splitting is done in such a way that the training set contains 70% of the data. These subsets were used to plot the ROC curve and calculate the AUC value.
+
+```{r odds ratio2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Split data into training and testing sets
+set.seed(123)
+train_index <- sample(1:nrow(films), size = round(nrow(films) * 0.7), replace = FALSE)
+train_data <- films[train_index, ]
+test_data <- films[-train_index, ]
+# Predict the test data using the fitted model
+test_data$predicted <- predict(fit4, newdata = test_data, type = "response")
+
+# Calculate the ROC curve and AUC
+roc_data <- roc(test_data$rating2, test_data$predicted)
+roc_auc <- auc(roc_data)
+roc_auc
+```
+```{r odds ratio1, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Plot the ROC curve
+plot(roc_data,
+  main = "ROC Curve for Movie Rating Model",
+  xlab = "False Positive Rate", ylab = "True Positive Rate",
+  print.auc = TRUE, auc.polygon = TRUE, grid = c(0.2, 0.2), col = "darkblue"
+)
+abline(a = 0, b = 1, lty = 2, col = "gray")
+```
+This result shows that the model works well for predicting the classification of observations in the test dataset, because the area under the ROC curve is 0.9502, which means that the model can distinguish positive and negative examples to a large extent
+
+```{r result, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# View model results
+summary(fit4)
+```
+
+We utilize the \textit{odds ratio} to measure the strength of association of features used in the model and IMDb rating.
+
+```{r result2, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+# Extract Coefficients and Standard Errors
+coef_df <- tidy(fit4, exponentiate = TRUE) %>%
+  filter(term != "(Intercept)") %>%
+  mutate_if(is.numeric, list(~ round(., 2))) %>%
+  mutate(
+    lower = estimate - 1.96 * std.error,
+    upper = estimate + 1.96 * std.error
+  )
+
+# plot the coefficients
+ggplot(coef_df, aes(x = term, y = estimate)) +
+  geom_point(size = 3) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), width = 0.2) +
+  coord_flip() +
+  labs(
+    title = "Effect of predictors on movie rating",
+    x = "", y = "Odds Ratio"
+  ) +
+  theme_minimal()
+```
+
+According to the results, the following conclusions can be drawn:
+
+* \texttt{Intercept}: The log odds of the response variable being 1 when all independent variables are 0 in this model is 8.276.
+
+* \texttt{Year}: For each increase of 1 year, the log odds of a movie being classified as rating2=1 will decrease by 2.145e-03 units.
+
+* \texttt{Length}: For each increase of 1 minute in movie length, the log odds of a movie being classified as rating2=1 will decrease by 0.2969 units, with a p-value of 0.059, which is not significant enough.
+
+* \texttt{Budget}: For each increase of 1 unit in budget, the log odds of a movie being classified as rating2=1 will increase by 0.2304 units, with a p-value less than 0.001, which is significant.
+
+* \texttt{Votes}: For each increase of 1 vote, the log odds of a movie being classified as rating2=1 will decrease by 0.0043 units, with a p-value of 0.306, which is not significant enough.
+
+* \texttt{genreAction, genreAnimation, genreComedy, genreDocumentary,} and \texttt{genreDrama}: Compared to genreThriller, the log odds of movies of other genres being classified as rating2=1 are -4.126, -4.889, -0.6432, 1.447, and -5.656 units, respectively, with p-values less than 0.05, which are significant.
+
+* \texttt{genreRomance}: Compared to genreThriller, the log odds of romance movies being classified as rating2=1 is -4.992 units, with a p-value less than 0.001, which is significant.
+
+* \texttt{year\_length}: For each increase of 1 year and 1 minute in movie length, the log odds of a movie being classified as rating2=1 will increase by 9.426e-05 units, with a p-value of 0.236, which is not significant enough.
+
+* \texttt{year\_votes}: For each increase of 1 year and 1 vote, the log odds of a movie being classified as rating2=1 will increase by 2.205e-06 units, with a p-value of 0.296, which is not significant enough.
+
+* \texttt{length\_votes}: For each increase of 1 minute in movie length, the log odds of a movie being classified as rating2=1 will increase by 1.122e-06 units, with a p-value of 0.125, which is not significant enough.
+
+* \texttt{budget\_length}: For each increase of 1 unit in budget and 1 minute in movie length, the log odds of a movie being classified as rating2=1 will increase by 0.003978 units, with a p-value less than 0.001, which is significant.
+
+* \texttt{budget\_votes}: For each increase of 1 unit in budget and 1 vote, the log odds of a movie being classified as rating2=1 will decrease by 1.411e-05 units, with a p-value of 0.
+
+
+# Conclusion
+
+The report analyzes IMDb data to extract features that affect the rating of movies. The model developed for the analysis has an AUC value of 0.95, which is very promising. Based on the results obtained, we can conclude that budget and genre have a significant effect on determining whether the rating of a movie is greater than 7. Besides, budget-length and budget-votes interactions have also influenced the ratings.
+
+For further research, we use stepwise regression method to do model optimization.
+
+```{r optimization, echo=TRUE, eval=TRUE, warning=FALSE, message=FALSE}
+step.fit4 <- stepAIC(fit4, direction = "both", trace = FALSE)
+summary(step.fit4)
+```
+We get a model with higher AIC value. And all the variables in this model is significant.
