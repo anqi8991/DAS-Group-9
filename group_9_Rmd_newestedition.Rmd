@@ -188,7 +188,7 @@ According to the results, the following conclusions can be drawn:
 * The coefficient of film length (length) is 0.94, and the confidence interval does not include 1, indicating that the film length has a negative impact on the score, that is, the longer the film length, the lower the score.
 * The coefficient of budget (budget) is 1.68, and the confidence interval does not include 1, indicating that the budget has a positive impact on the score, that is, the higher the budget, the higher the score.
 * The coefficient of the number of votes (votes) is 1, indicating that the impact of the number of votes on the score is not significantly different.
-* The coefficients of different types of movies are quite different, and the coefficients of action movies (genreAction) and cartoons (genreAnimation) are relatively small, indicating that these two types of movies have little impact on ratings; while the coefficients of documentaries (genreDocumentary) are compared Large, indicating that documentaries have a greater impact on ratings.
+* None of the different genres had a significant effect.
 
 # Step 5: Variables Selection and Models Selection 
 
@@ -198,7 +198,7 @@ The observations from variable p-values indicate that some variables are statist
 # After selecting variables:
 # According to GLM fit summary, we choose the variables with p-value lower than 0.05
 fit2 = glm(rating2 ~ length + budget + votes + genreAction + genreAnimation + genreDrama + genreRomance, data=films, family=binomial)
-fit3 = glm(rating2 ~ length + budget + genreComedy + genreDocumentary , data=films, family=binomial)
+fit3 = glm(rating2 ~ length + budget , data=films, family=binomial)
 table1 = matrix(c(fit$aic, fit2$aic, fit3$aic), dimnames = list(c("fit","fit2","fit3"), c("AIC")))
 table1
 ```
